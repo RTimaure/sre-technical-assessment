@@ -33,11 +33,6 @@ terraform {
 # ---------------------------------------------------------------------------
 #  Variables
 # ---------------------------------------------------------------------------
-#Variable for the fx-quote-service availability SLO ID
-variable "fx_quote_availability_slo_id" {
-  description = "ID of the Datadog SLO resource tracking fx-quote-service availability."
-  type        = string
-}
 
 variable "service_name" {
   description = "Service name as tagged in Datadog."
