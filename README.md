@@ -2,7 +2,7 @@
 
 Submission by **Rebeca Timaure** for the Site Reliability Engineer role.
 
-This repository contains the design documents and Terraform alerting configuration for the assessment. Nothing has been built or deployed; all artifacts are design deliverables prepared for walkthrough and discussion.
+This repository contains the design documents and Terraform alerting configuration for the assessment.
 
 ---
 
