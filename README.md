@@ -1,44 +1,58 @@
 # SRE Technical Assessment
-Submission by Rebeca Timaure for the Site Reliability Engineer role.
 
-This repository contains a production readiness assessment, SLO-based monitoring configuration and disaster recovery planning for critical fintech workloads.
-Nothing in this repository has been built or deployed. It contains design documents and a Terraform configuration file that has not been applied.
+Submission by **Rebeca Timaure** for the Site Reliability Engineer role.
 
-## Use of AI tools
-I used Claude (Anthropic) as a drafting and review assistant. I wrote the first versions of the readiness standard, the gap table, the SLOs and the roll-out approach, and used the tool to challenge and refine them. For the alert file, I wrote a first version and Claude drafted the revised Terraform configuration, which I reviewed and adapted.
+This repository contains the design documents and Terraform alerting configuration for the assessment. Nothing has been built or deployed; all artifacts are design deliverables prepared for walkthrough and discussion.
 
-| Area | How I used AI | What I decided or verified myself |
+---
+
+## Executive Summary
+
+- **Task 1 — Production Readiness (`fx-quote-service`):** **NO-GO** for Tier 1 promotion in its current state. The service lacks customer-impact monitoring, on-call coverage, runbooks, validated rollback, peak load testing, and single-point-of-failure mitigation (single-node Redis and single external rate provider). Promotion to **GO** is conditional on resolving launch-blocking gaps and providing validation evidence within the three-week window.
+- **Task 2 — Recovery Exercise Plan (`payout-service`):** Prioritizes an isolated **PostgreSQL Point-in-Time Recovery (PITR)** test first. Because PostgreSQL holds customer data and critical payout state with zero prior restore tests, validating whether the 800 GB database can meet the **2-hour RTO** and **5-minute RPO** safely—with auditable evidence for compliance—takes priority before broader workload or end-to-end failover tests.
+
+---
+
+## Repository Structure
+
+| File | Deliverable | Description |
 |---|---|---|
-| Readiness standard | Reviewed my draft, suggested merging and reordering items, and proposed verifiable evidence for each. | The final list of ten items, the mandatory/recommended split, and all numeric thresholds. |
-| Gap analysis and go/no-go | Critiqued my ranking, pointed out claims not supported by the brief (for example, AZ placement), and helped phrase the exit conditions. | The ranking criteria, what blocks launch versus what can wait 30 days, and who accepts each risk. |
-| SLOs | Flagged an inconsistency between my targets and helped define what counts as a valid request. | The targets (99.9% availability, 99% latency under 300 ms) and the decision to count stale quotes as failures. |
-| Alert file | Reviewed my Terraform and drafted the revised file: SLO as code, separate paging and ticket channels, alert messages with runbook links, and header comments. | The SLO target, the burn-rate thresholds and windows (14.4× over 1 h, 6× over 6 h), checked by hand against a 30-day budget, and the final review of the file. |
+| `production-readiness.pdf` | Task 1 (Document) | Tier 1 readiness standard (10 items), ranked gap analysis and conditional Go/No-Go call, two SLOs with error-budget actions, and a 20-service rollout approach (2 pages). |
+| `alerts.tf` | Task 1 (Code) | Datadog Terraform configuration defining the `fx-quote-service` availability SLO (99.9% over 30d) plus fast-burn and slow-burn alerts. |
+| `recovery-exercise-plan.pdf` | Task 2 (Document) | One-page recovery exercise plan for `payout-service` covering scenario selection, step-by-step RTO breakdown, safety guardrails, RTO/RPO measurement, and compliance evidence. |
 
+*(Note: Rename the file paths in the table above if you organize them into folders before pushing to GitHub.)*
 
-## Repository contents
+---
 
-| Path | Description |
-|---|---|
-| **task1-production-readiness.pdf** | Task 1: Tier 1 readiness standard, ranked gaps for `fx-quote-service`, go/no-go recommendation, SLOs and roll-out approach (2 pages). |
-| **task1-alerts/alerts.tf** | Task 1: availability SLO and burn-rate alert configuration as code, using the Datadog Terraform provider. |
-| **task2-recovery-exercise-plan.pdf** | Task 2: recovery exercise plan for `payout-service`, prioritising PostgreSQL Point-in-Time Recovery (PITR) (1 page). |
+## How the Deliverables Were Built
 
+1. **Baseline & Constraint Mapping:** Extracted hard numbers, dependencies, and organizational limits directly from the brief (e.g., 200 RPS peak, <300 ms latency target, 15-minute untested rollback, 5-engineer single-timezone team, 800 GB PostgreSQL with no second region, 2-hour RTO / 5-minute RPO).
+2. **Risk-Driven Prioritization:**
+   - For **Task 1**, separated launch blockers (undetected customer impact, missing on-call/runbooks, unverified dependency/AZ/rollback resilience) from 30-day post-launch improvements, anchoring targets to what the current architecture can realistically sustain.
+   - For **Task 2**, selected PostgreSQL PITR in an isolated environment as the first test so database recoverability and compliance evidence are proven without risking production data or external bank payouts.
+3. **Alerting & Verification Design:** Translated the availability SLO into multi-window burn-rate alerts in `alerts.tf` (14.4x over 1h/5m for paging; 6x over 6h/30m for tickets), validating the burn-rate math manually against a 30-day error budget (43.2 minutes).
 
-## Key assumptions and limits
-- No internal Tier 1 definition was supplied, so the readiness standard is a proposal the organisation can adjust.
-- The availability-zone placement of the six fx-quote-service instances was not provided. I assume the worst case (a single zone) and require it to be verified before launch.
-- Managed PostgreSQL is assumed to support point-in-time recovery. The 60-minute snapshot restore in the Task 2 timeline is a placeholder derived from the database size, to be replaced by a measured value.
-- The Terraform file is a design artefact. Its availability SLI counts non-5xx server-side requests. Quote freshness and client-side timeouts, which the SLO definition in the document counts as failures, would need a custom metric or load balancer data to be measured; this is a known limitation of the file.
-- No tooling or budget figures were given. Roll-out and on-call recommendations assume the five-engineer, single-time-zone owning team described in the brief.
+---
 
-## Summary
+## Key Assumptions & Known Limitations
 
-**Task 1 – Production readiness.** `fx-quote-service` is **NO-GO today** for Tier 1. It cannot detect a customer-impacting failure, there is no on-call coverage, and its rollback, capacity and dependency failure behaviour have not been tested. A **GO decision** is conditional on resolving the launch-blocking gaps and providing sufficient evidence of readiness within the three-week remediation period.
+- **Tier 1 baseline:** No internal Tier 1 definition was provided; the 10-item standard is an initial baseline designed to be adaptable by the organization.
+- **Availability Zone placement:** AZ distribution for the six `fx-quote-service` instances was unspecified. Worst-case placement (single AZ) is assumed and marked as a mandatory pre-launch verification item.
+- **PostgreSQL PITR & restore duration:** Managed PostgreSQL is assumed to support PITR within the 7-day log retention window. The 60-minute snapshot restore in Task 2 is a planning estimate (~222 MB/s for 800 GB) to be replaced by measured test telemetry.
+- **Alerting telemetry scope (`alerts.tf`):** The Terraform SLI measures server-side non-5xx traced requests (`trace.http.request.*`). Tracking stale quotes and client-side timeouts—included in the written SLO definition—requires custom application metrics or load-balancer telemetry and is noted as a known limitation of the sample configuration.
+- **Team capacity:** On-call and rollout recommendations assume the five-engineer, single-timezone owning team described in the brief.
 
-**Task 2 – Recovery exercise.** The first recovery exercise prioritises PostgreSQL Point-in-Time Recovery (PITR) for `payout-service`. The plan defines how to test database recoverability against the 2-hour RTO and 5-minute RPO, including recovery validation, execution safeguards and evidence collection. These targets remain unverified until the exercise is performed.
+---
 
+## Use of AI Tools
 
+I used **Claude (Anthropic)** as a drafting and review assistant across the deliverables. I authored the initial drafts, defined all technical positions, numeric targets, and risk decisions, and verified every calculation and configuration manually.
 
-
-
-
+| Area | How AI Was Used | What I Decided & Verified Myself |
+|---|---|---|
+| **Task 1 — Readiness standard** | Reviewed initial draft, suggested grouping/reordering items, and helped sharpen verification criteria. | Final 10-item list, mandatory vs. recommended split, and verification standards. |
+| **Task 1 — Gap analysis & Go/No-Go** | Challenged ranking logic, flagged assumptions not stated in the brief (such as AZ placement), and helped tighten exit conditions. | Gap severity ranking, pre-launch blockers vs. 30-day items, and risk-acceptance ownership. |
+| **Task 1 — SLOs** | Checked target consistency and helped clarify valid-request boundary wording. | 99.9% availability and 99% <300 ms latency targets, plus counting stale quotes as failures. |
+| **Task 1 — Alert file (`alerts.tf`)** | Reviewed initial Terraform and helped structure the multi-window SLO monitor resources and comments. | SLO target, burn-rate thresholds and windows (`14.4x` over 1h/5m, `6x` over 6h/30m) verified manually against a 30-day budget, and final code review. |
+| **Task 2 — Recovery exercise plan** | Reviewed draft structure against the one-page limit, challenged step durations, and helped tighten compliance evidence and safety-boundary phrasing. | Selection of PostgreSQL PITR as the first test, RTO step breakdown and RPO payout-loss math (~52 payouts at 15,000/day), isolation/stop rules, and pre-exercise checklist. |
